@@ -2,7 +2,7 @@
 Train a keras model for PHI
 
 Usage:
-python model.py --dataset /Volumes/Data/PHI/t1
+python model.py --dataset /Volumes/Flash/Data/PHI/t1
 
 '''
 
