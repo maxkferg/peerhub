@@ -48,8 +48,8 @@ def train(train_data_dir):
 
     features = Flatten(input_shape=model.output_shape[1:])(model.output)
     features = Dense(256, activation='relu')(features)
-    features = Dropout(0.5)(features)
-    output = Dense(1, activation='sigmoid')(features)
+    #features = Dropout(0.5)(features)
+    output = Dense(3, activation='softmax')(features)
 
     model = Model(inputs=model.input, outputs=output)
     print(model.summary())
@@ -67,7 +67,7 @@ def train(train_data_dir):
 
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
-    model.compile(loss='binary_crossentropy',
+    model.compile(loss='categorical_crossentropy',
                   optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
                   metrics=['accuracy'])
 

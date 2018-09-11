@@ -1,6 +1,7 @@
 import os
 import keras
 import numpy as np
+from keras.utils import np_utils
 
 TRAIN = "train"
 VAL = "val"
@@ -43,13 +44,14 @@ class DataGenerator(keras.utils.Sequence):
 
 
     def load_data(self,filename):
-    	"""Load the data from a file"""
-    	return np.load(filename)
+        """Load the data from a file"""
+        return np.load(filename)
 
 
     def load_labels(self,filename):
-    	"""Load the data from a file"""
-    	return np.load(filename)
+        """Load the data from a file"""
+        labels = np.load(filename)
+        return labels
 
 
     def on_epoch_end(self):
@@ -60,22 +62,23 @@ class DataGenerator(keras.utils.Sequence):
 
 
     def __get_list_IDs(self, mode):
-    	"""Return the IDs that make up this set"""
-    	ids = range(self.data.shape[0])
-    	if mode == TRAIN:
-    		ids = [i for i in ids if (i%5)>0]
-    	elif mode == VAL:
-    		ids = [i for i in ids if (i%5)==0]
-    	else:
-    		raise ValueError("Unknown mode %s"%mode)
-    	print("Filtered %s dataset contains %i samples"%(mode, len(ids)))
-    	return ids
+        """Return the IDs that make up this set"""
+        ids = range(self.data.shape[0])
+        if mode == TRAIN:
+            ids = [i for i in ids if (i%5)>0]
+        elif mode == VAL:
+            ids = [i for i in ids if (i%5)==0]
+        else:
+            raise ValueError("Unknown mode %s"%mode)
+        print("Filtered %s dataset contains %i samples"%(mode, len(ids)))
+        return ids
 
 
     def __data_generation(self, list_IDs_temp):
         """Generates data containing batch_size samples"""
         X = self.data[list_IDs_temp,:,:,:]
         y = self.labels[list_IDs_temp]
+        y = np_utils.to_categorical(y)
 
         return X, y
 
