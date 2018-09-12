@@ -14,6 +14,8 @@ def accuracy_fn_factory(tasks,i):
         start = tasks[i-1]
     end = tasks[i]
 
+    print("Task %i: Start "%i, start, "End", end)
+
     def accuracy_fn(y_true, y_pred):
         '''Just another crossentropy'''
         # Index out the values relevant to this task

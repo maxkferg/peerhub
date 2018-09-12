@@ -19,13 +19,14 @@ class DataGenerator(keras.utils.Sequence):
 
     def __init__(self, directory, mode=TRAIN, batch_size=32, dim=(224,224,3), n_classes=10, shuffle=True):
         """Initialization"""
+        print("Loading dataset from %s"%directory)
         self.dim = dim
         self.directory = directory
         self.batch_size = batch_size
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.data = self.load_data(os.path.join(directory, 'X_train.npy'))
-        self.labels = self.load_labels(os.path.join(directory, 'y_train.npy'))
+        self.labels, self.tasks = self.load_labels(os.path.join(directory, 'y_train.npy'))
         self.list_IDs = self.__get_list_IDs(mode)
         self.on_epoch_end()
 
@@ -57,7 +58,7 @@ class DataGenerator(keras.utils.Sequence):
     def load_labels(self,filename):
         """Load the data from a file"""
         labels = np.load(filename)
-        return labels
+        return self.__to_onehot(labels)
 
 
     def on_epoch_end(self):
@@ -80,11 +81,28 @@ class DataGenerator(keras.utils.Sequence):
         return ids
 
 
+    def __to_onehot(self, labels):
+        """
+        Convert a block of data to onehot labels
+        Return the task indices and the one hot labels
+        [2,1,0] -> [0,0,1, 0,1, 1,0]
+        """
+        columns = []
+        tasks = []
+        task_end_index = 0
+        for col in range(labels.shape[1]):
+            onehot = np_utils.to_categorical(labels[:,col])
+            task_end_index += onehot.shape[1]
+            columns.append(onehot)
+            tasks.append(task_end_index)
+        labels = np.hstack(columns)
+        return labels, tasks
+
+
     def __data_generation(self, list_IDs_temp):
         """Generates data containing batch_size samples"""
         X = self.data[list_IDs_temp,:,:,:]
         y = self.labels[list_IDs_temp]
-        y = np_utils.to_categorical(y)
 
         return X, y
 
@@ -110,7 +128,7 @@ def build_image_hashmap(directories):
     Build a map between hashes and images
     """
     hashmap = defaultdict(list)
-    for d in directories[1:]:
+    for d in directories:
         data = np.load(os.path.join(d, 'X_train.npy'))
         for i in range(data.shape[0]):
             image = data[i,:,:,:]
@@ -155,7 +173,7 @@ def build_dataset(directories, output_dir):
 
     X_path = os.path.join(output_dir, 'X_train.npy')
     Y_path = os.path.join(output_dir, 'Y_train.npy')
-    print("Saving...")
+    print("Saving")
     np.save(X_path, X)
     np.save(Y_path, Y)
     print("Saved new dataset to %s"%output_dir)

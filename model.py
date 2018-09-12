@@ -30,9 +30,6 @@ nb_validation_samples = 800
 epochs = 50
 batch_size = 64
 
-# Specifies what indexes corrospond to each task
-tasks = [3]
-
 
 params = {
     'dim': (img_height, img_width, img_channels),
@@ -44,7 +41,7 @@ params = {
 
 flags = tf.app.flags
 flags.DEFINE_string(name='dataset', default='/Volumes/Flash/Data/PHI/t1', help='path to dataset')
-flags.DEFINE_string(name='prepare', default='/Volumes/Flash/Data/PHI/', help='prepare the dataset using this directory')
+flags.DEFINE_string(name='prepare', default='', help='prepare the dataset using this directory')
 
 
 
@@ -62,7 +59,7 @@ def train(train_data_dir):
     features = Flatten(input_shape=model.output_shape[1:])(model.output)
     features = Dense(256, activation='relu')(features)
     #features = Dropout(0.5)(features)
-    logits = Dense(3, activation='softmax')(features)
+    logits = Dense(24, activation='softmax')(features)
 
     model = Model(inputs=model.input, outputs=logits)
 
@@ -77,21 +74,28 @@ def train(train_data_dir):
     #for layer in model.layers[:-3]:
     #    layer.trainable = False
 
+    # Prepare data augmentation configuration
+    train_generator = DataGenerator(train_data_dir, TRAIN, **params)
+    val_generator = DataGenerator(train_data_dir, VAL, **params)
+
+    # Extract the different tasks
+    assert train_generator.tasks==val_generator.tasks
+    tasks = train_generator.tasks
+    print("Using task columns:",tasks)
+
     # Create the loss function
     loss_function = crossentropy_factory(batch_size, tasks)
 
-    # Create the accuracy function
-    accuracy_fn = accuracy_fn_factory(tasks, 0)
+    # Create the accuracy functions
+    accuracy_fn = []
+    for i,task in enumerate(tasks):
+        accuracy_fn.append(accuracy_fn_factory(tasks, i))
 
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
     model.compile(loss=loss_function,
                   optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-                  metrics=[accuracy_fn])
-
-    # prepare data augmentation configuration
-    train_generator = DataGenerator(train_data_dir, TRAIN, **params)
-    val_generator = DataGenerator(train_data_dir, VAL, **params)
+                  metrics=accuracy_fn)
 
     # fine-tune the model
     model.fit_generator(

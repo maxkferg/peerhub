@@ -7,7 +7,7 @@ def list_directories(path):
     if COMBINED in dirs:
     	dirs.remove(COMBINED)
     dirs = [os.path.join(path, d) for d in dirs]
-    return dirs#sorted(dirs)
+    return sorted(dirs)
 
 
 def invert_map(map):
