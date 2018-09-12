@@ -4,15 +4,22 @@ Train a keras model for PHI
 Usage:
 python model.py --dataset /Volumes/Flash/Data/PHI/t1
 
+
+python model.py --prepare /Volumes/Flash/Data/PHI/
 '''
 
-import sys
+import sys, os
 import tensorflow as tf
 from keras import applications
 from keras import optimizers
 from keras.models import Model, Sequential
 from keras.layers import Dropout, Flatten, Dense
 from dataset import DataGenerator, TRAIN, VAL
+from losses import crossentropy_factory
+from metrics import accuracy_fn_factory
+from utils import list_directories
+from dataset import build_dataset
+
 
 # path to the model weights files.
 top_model_weights_path = 'weights/multinet.h5'
@@ -21,18 +28,24 @@ img_channels = 3
 nb_train_samples = 2000
 nb_validation_samples = 800
 epochs = 50
-batch_size = 16
+batch_size = 64
+
+# Specifies what indexes corrospond to each task
+tasks = [3]
 
 
 params = {
     'dim': (img_height, img_width, img_channels),
-    'batch_size': 64,
+    'batch_size': batch_size,
     'n_classes': 6,
     'shuffle': True,
 }
 
+
 flags = tf.app.flags
 flags.DEFINE_string(name='dataset', default='/Volumes/Flash/Data/PHI/t1', help='path to dataset')
+flags.DEFINE_string(name='prepare', default='/Volumes/Flash/Data/PHI/', help='prepare the dataset using this directory')
+
 
 
 def train(train_data_dir):
@@ -49,10 +62,9 @@ def train(train_data_dir):
     features = Flatten(input_shape=model.output_shape[1:])(model.output)
     features = Dense(256, activation='relu')(features)
     #features = Dropout(0.5)(features)
-    output = Dense(3, activation='softmax')(features)
+    logits = Dense(3, activation='softmax')(features)
 
-    model = Model(inputs=model.input, outputs=output)
-    print(model.summary())
+    model = Model(inputs=model.input, outputs=logits)
 
     # note that it is necessary to start with a fully-trained
     # classifier, including the top classifier,
@@ -62,14 +74,20 @@ def train(train_data_dir):
 
     # set the first 25 layers (up to the last conv block)
     # to non-trainable (weights will not be updated)
-    for layer in model.layers[:-3]:
-        layer.trainable = False
+    #for layer in model.layers[:-3]:
+    #    layer.trainable = False
+
+    # Create the loss function
+    loss_function = crossentropy_factory(batch_size, tasks)
+
+    # Create the accuracy function
+    accuracy_fn = accuracy_fn_factory(tasks, 0)
 
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
-    model.compile(loss='categorical_crossentropy',
+    model.compile(loss=loss_function,
                   optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-                  metrics=['accuracy'])
+                  metrics=[accuracy_fn])
 
     # prepare data augmentation configuration
     train_generator = DataGenerator(train_data_dir, TRAIN, **params)
@@ -83,9 +101,15 @@ def train(train_data_dir):
         validation_data=val_generator,
         nb_val_samples=nb_validation_samples)
 
-
 def main(args):
-    train(flags.FLAGS.dataset)
+    if flags.FLAGS.prepare:
+        directories = list_directories(flags.FLAGS.prepare)
+        dataset = os.path.join(flags.FLAGS.prepare, 'combined')
+        if not os.path.exists(dataset):
+            os.makedirs(dataset)
+        build_dataset(directories, dataset)
+    else:
+        train(flags.FLAGS.dataset)
 
 
 if __name__ == '__main__':

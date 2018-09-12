@@ -1,11 +1,17 @@
 import os
+import math
 import keras
+import imagehash
 import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
 from keras.utils import np_utils
+from sklearn.metrics import mean_squared_error
+from collections import defaultdict
+from utils import invert_map
 
 TRAIN = "train"
 VAL = "val"
-
 
 
 class DataGenerator(keras.utils.Sequence):
@@ -81,5 +87,78 @@ class DataGenerator(keras.utils.Sequence):
         y = np_utils.to_categorical(y)
 
         return X, y
+
+
+def show_images(img1, img2):
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,2,1)
+    ax1.imshow(img1)
+    ax2 = fig.add_subplot(2,2,2)
+    ax2.imshow(img2)
+    plt.show()
+
+
+
+def get_image_hash(image):
+    image = Image.fromarray(image, 'RGB')
+    return str(imagehash.dhash(image))
+
+
+
+def build_image_hashmap(directories):
+    """
+    Build a map between hashes and images
+    """
+    hashmap = defaultdict(list)
+    for d in directories[1:]:
+        data = np.load(os.path.join(d, 'X_train.npy'))
+        for i in range(data.shape[0]):
+            image = data[i,:,:,:]
+            h = get_image_hash(image)
+            hashmap[h].append(image)
+            #if len(hashmap[h])==2:
+            #   show_images(hashmap[h][0], hashmap[h][1])
+        print("Found %i unique hashes"%len(hashmap))
+    return hashmap
+
+
+
+def build_dataset(directories, output_dir):
+    print("Building dataset with:", directories)
+    print("Finding unique images...")
+    hashes = build_image_hashmap(directories)
+
+    # Build a map in the form {hash: index}
+    lookup = dict((h,i) for (i,h) in enumerate(hashes.keys()))
+
+    # The new dataset
+    n_tasks = len(directories)
+    n_hashes = len(hashes)
+    X = np.zeros((n_hashes,224,224,3), dtype=np.uint8)
+    Y = np.zeros((n_hashes,n_tasks), dtype=np.uint8)
+
+    for t, task_dir in enumerate(directories):
+        print("Processing task %i"%t)
+        data = np.load(os.path.join(task_dir, 'X_train.npy'))
+        labels = np.load(os.path.join(task_dir, 'y_train.npy'))
+
+        # Iterate over images in this task
+        for i in range(data.shape[0]):
+            image = data[i,:,:,:]
+            h = get_image_hash(image)
+            if h in lookup:
+                index = lookup[h]
+                X[index] = image
+                Y[index, t] = labels[i]
+            else:
+                print("Hash miss",h)
+
+    X_path = os.path.join(output_dir, 'X_train.npy')
+    Y_path = os.path.join(output_dir, 'Y_train.npy')
+    print("Saving...")
+    np.save(X_path, X)
+    np.save(Y_path, Y)
+    print("Saved new dataset to %s"%output_dir)
+
 
 
