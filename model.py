@@ -34,7 +34,7 @@ batch_size = 64
 params = {
     'dim': (img_height, img_width, img_channels),
     'batch_size': batch_size,
-    'n_classes': 6,
+    'n_classes': 24,
     'shuffle': True,
 }
 
@@ -46,7 +46,7 @@ flags.DEFINE_string(name='prepare', default='', help='prepare the dataset using 
 
 
 def train(train_data_dir):
-    model = applications.densenet.DenseNet121(include_top=False, weights='imagenet', input_shape=(img_height, img_width, img_channels))
+    model = applications.densenet.DenseNet169(include_top=False, weights='imagenet', input_shape=(img_height, img_width, img_channels))
     print('Model loaded.')
 
     # build a classifier model to put on top of the convolutional model
@@ -57,7 +57,7 @@ def train(train_data_dir):
     #top_model.add(Dense(1, activation='sigmoid'))
 
     features = Flatten(input_shape=model.output_shape[1:])(model.output)
-    features = Dense(256, activation='relu')(features)
+    features = Dense(1024, activation='relu')(features)
     #features = Dropout(0.5)(features)
     logits = Dense(24, activation='softmax')(features)
 
@@ -67,7 +67,6 @@ def train(train_data_dir):
     # classifier, including the top classifier,
     # in order to successfully do fine-tuning
     # top_model.load_weights(top_model_weights_path)
-
 
     # set the first 25 layers (up to the last conv block)
     # to non-trainable (weights will not be updated)
@@ -94,7 +93,7 @@ def train(train_data_dir):
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
     model.compile(loss=loss_function,
-                  optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+                  optimizer=optimizers.SGD(lr=5e-4, momentum=0.9),
                   metrics=accuracy_fn)
 
     # fine-tune the model

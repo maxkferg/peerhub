@@ -172,7 +172,7 @@ def build_dataset(directories, output_dir):
                 print("Hash miss",h)
 
     X_path = os.path.join(output_dir, 'X_train.npy')
-    Y_path = os.path.join(output_dir, 'Y_train.npy')
+    Y_path = os.path.join(output_dir, 'y_train.npy')
     print("Saving")
     np.save(X_path, X)
     np.save(Y_path, Y)
