@@ -36,7 +36,7 @@ class DataGenerator(keras.utils.Sequence):
         return int(np.floor(len(self.list_IDs) / self.batch_size))
 
 
-    def __getitem__(self, index):
+    def __getitem__(self, index, raw=False):
         """Generate one batch of data"""
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
@@ -45,7 +45,7 @@ class DataGenerator(keras.utils.Sequence):
         list_IDs_temp = [self.list_IDs[k] for k in indexes]
 
         # Generate data
-        X, y = self.__data_generation(list_IDs_temp)
+        X, y = self.__data_generation(list_IDs_temp, raw)
 
         return X, y
 
@@ -57,8 +57,8 @@ class DataGenerator(keras.utils.Sequence):
 
     def load_labels(self,filename):
         """Load the data from a file"""
-        labels = np.load(filename)
-        return self.__to_onehot(labels)
+        self.raw_labels = np.load(filename)
+        return self.__to_onehot(self.raw_labels)
 
 
     def on_epoch_end(self):
@@ -92,6 +92,9 @@ class DataGenerator(keras.utils.Sequence):
         task_end_index = 0
         for col in range(labels.shape[1]):
             onehot = np_utils.to_categorical(labels[:,col])
+            for row in range(onehot.shape[0]):
+                if labels[row,col] < 0:
+                    onehot[row,:] = -1
             task_end_index += onehot.shape[1]
             columns.append(onehot)
             tasks.append(task_end_index)
@@ -99,10 +102,13 @@ class DataGenerator(keras.utils.Sequence):
         return labels, tasks
 
 
-    def __data_generation(self, list_IDs_temp):
+    def __data_generation(self, list_IDs_temp, raw):
         """Generates data containing batch_size samples"""
         X = self.data[list_IDs_temp,:,:,:]
-        y = self.labels[list_IDs_temp]
+        if raw:
+            y = self.raw_labels[list_IDs_temp]
+        else:
+            y = self.labels[list_IDs_temp]
 
         return X, y
 
@@ -153,7 +159,7 @@ def build_dataset(directories, output_dir):
     n_tasks = len(directories)
     n_hashes = len(hashes)
     X = np.zeros((n_hashes,224,224,3), dtype=np.uint8)
-    Y = np.zeros((n_hashes,n_tasks), dtype=np.uint8)
+    Y = -1*np.ones((n_hashes,n_tasks), dtype=np.uint8)
 
     for t, task_dir in enumerate(directories):
         print("Processing task %i"%t)

@@ -6,6 +6,8 @@ python model.py --dataset /Volumes/Flash/Data/PHI/t1
 
 
 python model.py --prepare /Volumes/Flash/Data/PHI/
+
+python model.py --dataset /Volumes/Flash/Data/PHI/ --test=True
 '''
 
 import sys, os
@@ -19,6 +21,7 @@ from losses import crossentropy_factory
 from metrics import accuracy_fn_factory
 from utils import list_directories
 from dataset import build_dataset
+from test import test
 
 
 # path to the model weights files.
@@ -42,11 +45,13 @@ params = {
 flags = tf.app.flags
 flags.DEFINE_string(name='dataset', default='/Volumes/Flash/Data/PHI/t1', help='path to dataset')
 flags.DEFINE_string(name='prepare', default='', help='prepare the dataset using this directory')
+flags.DEFINE_string(name='model', default='resnet', help='Feature extraction model')
+flags.DEFINE_bool(name='test', default=False, help='run sanity checks')
 
 
 
-def train(train_data_dir):
-    model = applications.densenet.DenseNet169(include_top=False, weights='imagenet', input_shape=(img_height, img_width, img_channels))
+def train(train_data_dir, model_fn):
+    model = model_fn(include_top=False, weights='imagenet', input_shape=(img_height, img_width, img_channels))
     print('Model loaded.')
 
     # build a classifier model to put on top of the convolutional model
@@ -83,7 +88,7 @@ def train(train_data_dir):
     print("Using task columns:",tasks)
 
     # Create the loss function
-    loss_function = crossentropy_factory(batch_size, tasks)
+    loss_function = crossentropy_factory(tasks)
 
     # Create the accuracy functions
     accuracy_fn = []
@@ -104,6 +109,20 @@ def train(train_data_dir):
         validation_data=val_generator,
         nb_val_samples=nb_validation_samples)
 
+
+def get_model_fn(name):
+    if name=="resnet":
+        return applications.resnet50.ResNet50
+    elif name=="densenet":
+        return applications.densenet.DenseNet121
+    elif name=="xception":
+        return applications.xception.Xception
+    elif name=="inception_resnet":
+        return applications.inception_resnet_v2.InceptionResNetV2
+    else:
+        raise ValueError("Unknown model %s"%name)
+
+
 def main(args):
     if flags.FLAGS.prepare:
         directories = list_directories(flags.FLAGS.prepare)
@@ -111,8 +130,11 @@ def main(args):
         if not os.path.exists(dataset):
             os.makedirs(dataset)
         build_dataset(directories, dataset)
+    elif flags.FLAGS.test:
+        test(flags.FLAGS.dataset)
     else:
-        train(flags.FLAGS.dataset)
+        model_fn = get_model_fn(flags.FLAGS.model)
+        train(flags.FLAGS.dataset, model_fn)
 
 
 if __name__ == '__main__':
