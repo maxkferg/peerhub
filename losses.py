@@ -24,8 +24,8 @@ def crossentropy_factory(tasks):
 
                 task_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_masked, logits=pred_masked, name="loss")
 
-                # Average loss is preferred so we don't favour tasks with many classes
-                losses.append(tf.reduce_mean(task_loss))
+                # Using reduce_sum prevents nan when there are no contributing tasks
+                losses.append(tf.reduce_sum(task_loss))
         return tf.add_n(losses)
 
     return crossentropy_loss_fn
