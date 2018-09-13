@@ -18,7 +18,7 @@ from keras.models import Model, Sequential
 from keras.layers import Dropout, Flatten, Dense
 from dataset import DataGenerator, TRAIN, VAL
 from losses import crossentropy_filtered_loss
-#from metrics import accuracy_fn_factory
+from metrics import accuracy_fn
 from utils import list_directories
 from dataset import build_dataset
 from test import test
@@ -87,16 +87,11 @@ def train(train_data_dir, model_fn):
     # Make the multi-head model
     model = Model(inputs=model.input, outputs=outputs)
 
-    # Create the accuracy functions
-    #accuracy_fn = []
-    #for i,task in enumerate(tasks):
-    #    accuracy_fn.append(accuracy_fn_factory(tasks, i))
-
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
     model.compile(loss=crossentropy_filtered_loss,
                   optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-                  metrics=['accuracy'])
+                  metrics=[accuracy_fn])
 
     # fine-tune the model
     model.fit_generator(
