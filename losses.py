@@ -12,16 +12,20 @@ def crossentropy_factory(tasks):
         # Match up all the negative ones
         losses = []
         for i,end in enumerate(tasks):
-            start = 0 if i==0 else tasks[i-1]
-            true = y_true[:, start:end]
-            pred = y_pred[:, start:end]
-            task_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true, logits=pred)
-            # Get a column of booleans that is true for available tasks
-            task_mask = tf.stop_gradient(tf.greater(y_true[:,0], -1))
-            # Only these tasks contribute to the loss
-            masked_loss = tf.boolean_mask(task_loss, task_mask)
-            # Average loss is preferred so we don't favour tasks with many classes
-            losses.append(tf.reduce_mean(masked_loss))
+            with tf.name_scope("task_%i"%i) as scope:
+                start = 0 if i==0 else tasks[i-1]
+                true = y_true[:, start:end]
+                pred = y_pred[:, start:end]
+
+                # Mask out the tasks that are not included
+                task_mask = tf.stop_gradient(tf.greater(true[:,0], -1), name="task_mask")
+                true_masked = tf.boolean_mask(true, task_mask, name="true_masked")
+                pred_masked = tf.boolean_mask(pred, task_mask, name="pred_masked")
+
+                task_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_masked, logits=pred_masked, name="loss")
+
+                # Average loss is preferred so we don't favour tasks with many classes
+                losses.append(tf.reduce_mean(task_loss))
         return tf.add_n(losses)
 
     return crossentropy_loss_fn
