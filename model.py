@@ -63,8 +63,7 @@ def train(train_data_dir, model_fn):
 
     features = Flatten(input_shape=model.output_shape[1:])(model.output)
     features = Dense(1024, activation='relu')(features)
-    #features = Dropout(0.5)(features)
-    logits = Dense(24, activation='softmax')(features)
+    logits = Dense(24, activation=None)(features)
 
     model = Model(inputs=model.input, outputs=logits)
 
@@ -75,8 +74,8 @@ def train(train_data_dir, model_fn):
 
     # set the first 25 layers (up to the last conv block)
     # to non-trainable (weights will not be updated)
-    #for layer in model.layers[:-3]:
-    #    layer.trainable = False
+    for layer in model.layers[:-5]:
+        layer.trainable = False
 
     # Prepare data augmentation configuration
     train_generator = DataGenerator(train_data_dir, TRAIN, **params)
@@ -98,7 +97,7 @@ def train(train_data_dir, model_fn):
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
     model.compile(loss=loss_function,
-                  optimizer=optimizers.SGD(lr=5e-4, momentum=0.9),
+                  optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
                   metrics=accuracy_fn)
 
     # fine-tune the model
