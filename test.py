@@ -22,14 +22,13 @@ def test_dataset(generator):
         X,y = generator[i]
         _,r = generator.__getitem__(i,raw=True)
         print("Image Batch Shape:",X.shape)
-        print("Label batch shape:",y.shape)
-        print("Labels: ",y[i,:],"\n")
+        print("Label batch shape:",y["task_1"].shape)
+        print("Labels: ",y["task_1"][i,:],"\n")
         print("Raw labels:", r[i,:],"\n")
 
-        for t,end in enumerate(generator.tasks):
-            start = 0 if t==0 else generator.tasks[t-1]
-            true = y[i, start:end]
-            print("Task %i"%t, "target:", true)
+        for task in y.keys():
+            print("Task %s"%task, "target:\n")
+            print(y[task])
 
 
 

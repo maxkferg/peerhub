@@ -17,8 +17,8 @@ from keras import optimizers
 from keras.models import Model, Sequential
 from keras.layers import Dropout, Flatten, Dense
 from dataset import DataGenerator, TRAIN, VAL
-from losses import crossentropy_factory
-from metrics import accuracy_fn_factory
+from losses import crossentropy_filtered_loss
+#from metrics import accuracy_fn_factory
 from utils import list_directories
 from dataset import build_dataset
 from test import test
@@ -61,12 +61,6 @@ def train(train_data_dir, model_fn):
     #top_model.add(Dropout(0.5))
     #top_model.add(Dense(1, activation='sigmoid'))
 
-    features = Flatten(input_shape=model.output_shape[1:])(model.output)
-    features = Dense(1024, activation='relu')(features)
-    logits = Dense(24, activation=None)(features)
-
-    model = Model(inputs=model.input, outputs=logits)
-
     # note that it is necessary to start with a fully-trained
     # classifier, including the top classifier,
     # in order to successfully do fine-tuning
@@ -74,31 +68,35 @@ def train(train_data_dir, model_fn):
 
     # set the first 25 layers (up to the last conv block)
     # to non-trainable (weights will not be updated)
-    for layer in model.layers[:-5]:
+    for layer in model.layers:
         layer.trainable = False
 
     # Prepare data augmentation configuration
     train_generator = DataGenerator(train_data_dir, TRAIN, **params)
     val_generator = DataGenerator(train_data_dir, VAL, **params)
 
-    # Extract the different tasks
-    assert train_generator.tasks==val_generator.tasks
-    tasks = train_generator.tasks
-    print("Using task columns:",tasks)
+    i = 0
+    outputs = []
+    for num_classes in train_generator.num_classes:
+        features = Flatten(input_shape=model.output_shape[1:])(model.output)
+        features = Dense(48, activation='relu')(features)
+        logits = Dense(num_classes, activation=None, name="task_%i"%i)(features)
+        outputs.append(logits)
+        i += 1
 
-    # Create the loss function
-    loss_function = crossentropy_factory(tasks)
+    # Make the multi-head model
+    model = Model(inputs=model.input, outputs=outputs)
 
     # Create the accuracy functions
-    accuracy_fn = []
-    for i,task in enumerate(tasks):
-        accuracy_fn.append(accuracy_fn_factory(tasks, i))
+    #accuracy_fn = []
+    #for i,task in enumerate(tasks):
+    #    accuracy_fn.append(accuracy_fn_factory(tasks, i))
 
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
-    model.compile(loss=loss_function,
+    model.compile(loss=crossentropy_filtered_loss,
                   optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-                  metrics=accuracy_fn)
+                  metrics=['accuracy'])
 
     # fine-tune the model
     model.fit_generator(

@@ -26,7 +26,7 @@ class DataGenerator(keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.data = self.load_data(os.path.join(directory, 'X_train.npy'))
-        self.labels, self.tasks = self.load_labels(os.path.join(directory, 'y_train.npy'))
+        self.labels, self.num_classes = self.load_labels(os.path.join(directory, 'y_train.npy'))
         self.list_IDs = self.__get_list_IDs(mode)
         self.on_epoch_end()
 
@@ -85,21 +85,21 @@ class DataGenerator(keras.utils.Sequence):
         """
         Convert a block of data to onehot labels
         Return the task indices and the one hot labels
-        [2,1,0] -> [0,0,1, 0,1, 1,0]
+        [2,1,0] -> {task0: [[0,0,1]], task2: [[0,1]] ...}
         """
-        columns = []
-        tasks = []
-        task_end_index = 0
-        for col in range(labels.shape[1]):
-            onehot = np_utils.to_categorical(labels[:,col])
+        new_labels = {}
+        num_classes = []
+        for t in range(labels.shape[1]):
+            name = "task_%i"%t
+            onehot = np_utils.to_categorical(labels[:,t])
+            # Fix up the labels that should be set to -1
             for row in range(onehot.shape[0]):
-                if labels[row,col] < 0:
+                if labels[row,t] < 0:
                     onehot[row,:] = -1
-            task_end_index += onehot.shape[1]
-            columns.append(onehot)
-            tasks.append(task_end_index)
-        labels = np.hstack(columns)
-        return labels, tasks
+            # Now the labels for this task can be recorded
+            new_labels[name] = onehot
+            num_classes.append(onehot.shape[1])
+        return new_labels, num_classes
 
 
     def __data_generation(self, list_IDs_temp, raw):
@@ -108,8 +108,9 @@ class DataGenerator(keras.utils.Sequence):
         if raw:
             y = self.raw_labels[list_IDs_temp]
         else:
-            y = self.labels[list_IDs_temp]
-
+            y = {}
+            for k,v in self.labels.items():
+                y[k] = v[list_IDs_temp]
         return X, y
 
 
