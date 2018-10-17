@@ -18,17 +18,15 @@ params = {
 
 
 def test_dataset(generator):
-    for i in range(100):
+    for i in range(10):
         X,y = generator[i]
         _,r = generator.__getitem__(i,raw=True)
-        print("Image Batch Shape:",X.shape)
-        print("Label batch shape:",y["task_1"].shape)
-        print("Labels: ",y["task_1"][i,:],"\n")
-        print("Raw labels:", r[i,:],"\n")
 
-        for task in y.keys():
-            print("Task %s"%task, "target:\n")
-            print(y[task])
+        for i in range(len(y)):
+            name = "task_%i"%i
+            labels = y[name]
+            for row in range(labels.shape[0]):
+                print("(%i) Name:"%i, name, "Raw label:", r[row,i], "Categorical:", labels[row,:])
 
 
 
@@ -38,3 +36,4 @@ def test(train_data_dir):
     val_generator = DataGenerator(train_data_dir, VAL, **params)
 
     test_dataset(train_generator)
+    test_dataset(val_generator)

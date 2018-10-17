@@ -26,7 +26,7 @@ class DataGenerator(keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.data = self.load_data(os.path.join(directory, 'X_train.npy'))
-        self.labels, self.num_classes = self.load_labels(os.path.join(directory, 'y_train.npy'))
+        self.labels = self.load_labels(os.path.join(directory, 'y_train.npy'))
         self.list_IDs = self.__get_list_IDs(mode)
         self.on_epoch_end()
 
@@ -88,7 +88,11 @@ class DataGenerator(keras.utils.Sequence):
         [2,1,0] -> {task0: [[0,0,1]], task2: [[0,1]] ...}
         """
         new_labels = {}
-        num_classes = []
+        
+        # labels should be a column vector (consistency between combined/single)
+        if len(labels.shape)==1:
+            return {"task_0": np_utils.to_categorical(labels)}
+
         for t in range(labels.shape[1]):
             name = "task_%i"%t
             onehot = np_utils.to_categorical(labels[:,t])
@@ -99,7 +103,9 @@ class DataGenerator(keras.utils.Sequence):
             # Now the labels for this task can be recorded
             new_labels[name] = onehot
             num_classes.append(onehot.shape[1])
-        return new_labels, num_classes
+            # Print a test for debugging
+            print("Name",name, "Raw label:", labels[0,t], "One hot:", new_labels[name][0,:])
+        return new_labels
 
 
     def __data_generation(self, list_IDs_temp, raw):
@@ -110,7 +116,7 @@ class DataGenerator(keras.utils.Sequence):
         else:
             y = {}
             for k,v in self.labels.items():
-                y[k] = v[list_IDs_temp]
+                y[k] = v[list_IDs_temp,:]
         return X, y
 
 

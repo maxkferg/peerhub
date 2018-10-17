@@ -15,7 +15,7 @@ import tensorflow as tf
 from keras import applications
 from keras import optimizers
 from keras.models import Model, Sequential
-from keras.layers import Dropout, Flatten, Dense
+from keras.layers import Dropout, Flatten, Dense, GlobalAveragePooling2D
 from dataset import DataGenerator, TRAIN, VAL
 from losses import crossentropy_filtered_loss
 from metrics import accuracy_fn
@@ -28,8 +28,8 @@ from test import test
 top_model_weights_path = 'weights/multinet.h5'
 img_width, img_height = 224, 224
 img_channels = 3
-nb_train_samples = 2000
-nb_validation_samples = 800
+nb_train_steps = 1000
+nb_validation_steps = 20
 epochs = 50
 batch_size = 64
 
@@ -51,8 +51,8 @@ flags.DEFINE_bool(name='test', default=False, help='run sanity checks')
 
 
 def train(train_data_dir, model_fn):
-    model = model_fn(include_top=False, weights='imagenet', input_shape=(img_height, img_width, img_channels))
-    print('Model loaded.')
+    base_model = model_fn(include_top=False, weights='imagenet')
+    print('Model loaded:', model_fn)
 
     # build a classifier model to put on top of the convolutional model
     #top_model = Sequential()
@@ -68,41 +68,75 @@ def train(train_data_dir, model_fn):
 
     # set the first 25 layers (up to the last conv block)
     # to non-trainable (weights will not be updated)
-    for layer in model.layers:
-        layer.trainable = False
+    #for layer in model.layers[:-4]:
+    #    layer.trainable = False
 
     # Prepare data augmentation configuration
     train_generator = DataGenerator(train_data_dir, TRAIN, **params)
-    val_generator = DataGenerator(train_data_dir, VAL, **params)
+    val_generator = DataGenerator(train_data_dir, TRAIN, **params)
+    _,y = train_generator[0]
 
-    i = 0
+    #features = Flatten(input_shape=model.output_shape[1:])(model.output)
+    #features = Dense(128, activation='relu')(features)
+
     outputs = []
-    for num_classes in train_generator.num_classes:
-        features = Flatten(input_shape=model.output_shape[1:])(model.output)
-        features = Dense(48, activation='relu')(features)
-        logits = Dense(num_classes, activation=None, name="task_%i"%i)(features)
-        outputs.append(logits)
-        i += 1
+    tasks = sorted(y.keys())[:1]
+    print("Creating network heads for ", tasks)
+
+    for task in tasks:
+        n = y[task].shape[1]
+        x = base_model.output
+        x = GlobalAveragePooling2D()(x)
+        # let's add a fully-connected layer
+        x = Dense(1024, activation='relu')(x)
+        # and a logistic layer -- let's say we have 200 classes
+        predictions = Dense(n, activation='softmax', name=task)(x)
+        #features = Dense(64, activation='relu')(features)
+        #features = Dropout(0.2)(features)
+        #num_classes = y[task].shape[1]
+        #logits = Dense(num_classes, activation='softmax', name=task)(features)
+        outputs.append(predictions)
 
     # Make the multi-head model
-    model = Model(inputs=model.input, outputs=outputs)
+    model = Model(inputs=base_model.input, outputs=outputs)
+
+    for layer in base_model.layers:
+        layer.trainable = False
 
     # compile the model with a SGD/momentum optimizer
     # and a very slow learning rate.
-    model.compile(loss=crossentropy_filtered_loss,
-                  optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-                  metrics=[accuracy_fn])
+    model.compile(loss='categorical_crossentropy',#_filtered_loss,
+                  optimizer='rmsprop',
+                  metrics=['accuracy',accuracy_fn,])
 
     # fine-tune the model
     model.fit_generator(
         train_generator,
-        samples_per_epoch=nb_train_samples,
-        epochs=epochs,
+        steps_per_epoch=nb_train_steps,
+        epochs=2,
         validation_data=val_generator,
-        nb_val_samples=nb_validation_samples)
+        validation_steps=nb_validation_steps)
+
+    #for layer in model.layers[:249]:
+    #    layer.trainable = False
+    #for layer in model.layers[249:]:
+    #    layer.trainable = True
+    
+    from keras.optimizers import SGD
+    model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
+                  loss='categorical_crossentropy',#crossentropy_filtered_loss,
+                  metrics=['accuracy',accuracy_fn])
+
+    model.fit_generator(
+        train_generator,
+        steps_per_epoch=nb_train_steps,
+        epochs=50,
+        validation_data=val_generator,
+        validation_steps=nb_validation_steps)
 
 
 def get_model_fn(name):
+    #return applications.inception_v3.InceptionV3
     if name=="resnet":
         return applications.resnet50.ResNet50
     elif name=="densenet":
