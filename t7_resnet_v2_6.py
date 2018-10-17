@@ -180,9 +180,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 		running_corrects = 0
 		incorrect = {'00':0, '01':0, '02':0, '03':0, '10':0, '11':0, '12':0, '13':0, '20':0, '21':0, '22':0, '23':0, '30':0, '31':0, '32':0, '33':0}
 		# Update learning rate: StepLR
-		if type(scheduler) == torch.optim.lr_scheduler.StepLR: 
-			scheduler.step() 
-			print(dir(scheduler))
+		if type(scheduler) == torch.optim.lr_scheduler.StepLR:
+			scheduler.step()
+			print("Current learning rate: ", scheduler.get_lr())
 		for i, (inputs, labels) in enumerate(train_loader):
 			inputs = inputs.to(device)
 			labels = labels.to(device)
