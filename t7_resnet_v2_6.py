@@ -38,8 +38,8 @@ model_ft_filename = 't7_resnet_v2_ft6.ckpt'
 # HYPER PARAMETERS
 #-----------------
 # Interation
-num_epochs_feature_extraction = 0
-num_epochs_fine_tuning = 40
+num_epochs_feature_extraction = 10
+num_epochs_fine_tuning = 10
 batch_size = 256
 
 # Optimizer
@@ -400,6 +400,20 @@ torch.save(model_conv.state_dict(), model_fe_filename)
 # 			param.requires_grad = True
 
 
+block = model_conv.layer3
+for i in range(len(block)):
+ 	block.conv1.weight.requires_grad = True
+ 	block.bn1.weight.requires_grad = True
+ 	block.bn1.bias.requires_grad = True
+ 	block.conv2.weight.requires_grad = True
+ 	block.bn2.weight.requires_grad = True
+ 	block.bn2.bias.requires_grad = True
+	block.conv3.weight.requires_grad = True
+ 	block.bn3.weight.requires_grad = True
+ 	block.bn3.bias.requires_grad = True
+ 	block.conv1.weight.requires_grad = True
+
+
 
 # Allow update for a part of layer3 of Resnet
 # for i in range(22,23):
@@ -477,11 +491,7 @@ for i in range(0,5):
 
 	model_ft_filename = 't7_resnet_v2_ft6_{0}.ckpt'.format(int(i))
 	torch.save(model_conv.state_dict(), model_ft_filename)
-
-	num_epochs_fine_tuning = 20
-	batch_size = 256
-
-	initial_lr_finetuning = 0.002 # 0.0248364446993
+	initial_lr_finetuning = 0.002 * (0.1**i) # 0.0248364446993
 
 
 
