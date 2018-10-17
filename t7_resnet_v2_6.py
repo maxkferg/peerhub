@@ -13,6 +13,7 @@ import numpy as np
 import time
 import copy
 import PIL
+import os
 
 
 #-----------------
@@ -25,8 +26,8 @@ use_pretrained_fine_tuning_model = False # Setting it true makes the feature ext
 # Dataset dependent variables
 range_train = [0,2100]
 range_val = [2100,2632]
-x_train_path = './dataset/X_train.npy'
-y_train_path = './dataset/y_train.npy'
+x_train_path = os.path.expanduser('~/data/PHI/t6/X_train.npy')
+y_train_path = os.path.expanduser('~/data/PHI/t6/y_train.npy')
 model_fe_filename = 't7_resnet_v2_fe6.ckpt'
 model_ft_filename = 't7_resnet_v2_ft6.ckpt'
 
@@ -41,8 +42,8 @@ batch_size = 256
 
 # Optimizer
 optimizer_type = 'SGD'
-initial_lr = 0.02
-initial_lr_finetuning = 0.02 # 0.0248364446993
+initial_lr = 0.005
+initial_lr_finetuning = 0.005 # 0.0248364446993
 weight_decay = 1e-5 # 1e-2 returns good validation results
 momentum = 0.90 #SGD #[0.5, 0.9, 0.95, 0.99]
 nesterov = False #SGD
@@ -180,8 +181,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 		incorrect = {'00':0, '01':0, '02':0, '03':0, '10':0, '11':0, '12':0, '13':0, '20':0, '21':0, '22':0, '23':0, '30':0, '31':0, '32':0, '33':0}
 		# Update learning rate: StepLR
 		if type(scheduler) == torch.optim.lr_scheduler.StepLR: 
-			scheduler.step() 
-		for i, (inputs, labels) in enumerate(train_loader):
+                    scheduler.step() 
+                    print(dir(scheduler))
+                for i, (inputs, labels) in enumerate(train_loader):
 			inputs = inputs.to(device)
 			labels = labels.to(device)
 			# zero the parameter gradients
