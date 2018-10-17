@@ -62,18 +62,40 @@ threshold = 5e-2 #ReduceLROnPlateau
 
 class ResSkipNet(torchvision.models.resnet.ResNet):
 
+	def override_layers(self):
+
+
+		self.pool1 = nn.MaxPool2d(kernel_size=56, stride=1, padding=0) # Pools end of layer1
+		self.pool2 = nn.MaxPool2d(kernel_size=56, stride=1, padding=0) # Pools end of layer2
+		self.pool3 = nn.MaxPool2d(kernel_size=4, stride=4, padding=0) # Seongwoon
+		self.pool4 = nn.AvgPool2d(7, stride=1) # ResNet 152 standard
+
+		self.fc = nn.Sequential(
+			nn.Dropout(0.3),
+			nn.Linear(9216, 512),
+			nn.ReLU(),
+			nn.Linear(512, 4),
+		)
+
+
 	def forward(self, x):
 		x = self.conv1(x)
 		x = self.bn1(x)
 		x = self.relu(x)
 		x = self.maxpool(x)
 
-		x = self.layer1(x)
-		x = self.layer2(x)
-		x = self.layer3(x)
-		x = self.layer4(x)
+		x1 = self.layer1(x)
+		x2 = self.layer2(x1)
+		x3 = self.layer3(x2)
+		x4 = self.layer4(x3)
 
-		x = self.avgpool(x)
+		f1 = self.pool1(x1)
+		f2 = self.pool2(x2)
+		f3 = self.pool3(x3)
+		f4 = self.pool4(x4)
+
+		#x = self.avgpool(x)
+		x = self.cat([f1,f2,f3,f4])
 		x = x.view(x.size(0), -1)
 		x = self.fc(x)
 
@@ -110,13 +132,6 @@ new_layer2 = None
 new_layer3 = None
 new_avgpool = nn.MaxPool2d(kernel_size=4, stride=4, padding=0)
 # new_avgpool = None
-new_fc_layer = nn.Sequential(
-				nn.Dropout(0.3),
-				nn.Linear(9216, 512),
-				nn.ReLU(),
-				# nn.Dropout(0.3),
-				nn.Linear(512, 4),
-				)
 
 
 # Transform module
