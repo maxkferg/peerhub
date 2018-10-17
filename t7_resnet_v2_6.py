@@ -6,8 +6,10 @@ from __future__ import print_function, division
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.utils.model_zoo as model_zoo
 from torch.optim import lr_scheduler
 import torchvision
+from torchvision.models.resnet import Bottleneck
 from torchvision import datasets, models, transforms
 import numpy as np
 import time
@@ -58,10 +60,42 @@ threshold = 5e-2 #ReduceLROnPlateau
 
 
 
+class ResSkipNet(torchvision.models.resnet152):
+
+	def forward(self, x):
+		x = self.conv1(x)
+		x = self.bn1(x)
+		x = self.relu(x)
+		x = self.maxpool(x)
+
+		x = self.layer1(x)
+		x = self.layer2(x)
+		x = self.layer3(x)
+		x = self.layer4(x)
+
+		x = concat()
+		x = self.avgpool(x)
+		x = x.view(x.size(0), -1)
+		x = self.fc(x)
+
+		return x
+
+
+def resnet152(pretrained=False, **kwargs):
+    """Constructs a ResNet-152 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResSkipNet(Bottleneck, [3, 8, 36, 3], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+    return model
+
+
 
 
 # Model
-basemodel = torchvision.models.resnet152(pretrained=True)
+basemodel = ResSkipNet(pretrained=True)
 new_layer4 = nn.Sequential(
 # 				# nn.Conv2d(512, 256, kernel_size=(1,1), stride=(1,1), bias=False),
 # 				# nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
@@ -72,9 +106,7 @@ new_layer4 = nn.Sequential(
 # 				# nn.ReLU(inplace=True)
 				)
 # new_layer4 = None
-new_layer2 = nn.Sequential()
 new_layer2 = None
-new_layer3 = nn.Sequential()
 new_layer3 = None
 new_avgpool = nn.MaxPool2d(kernel_size=4, stride=4, padding=0)
 # new_avgpool = None
