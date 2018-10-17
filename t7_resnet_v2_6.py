@@ -60,7 +60,7 @@ threshold = 5e-2 #ReduceLROnPlateau
 
 
 
-class ResSkipNet(torchvision.models.resnet152):
+class ResSkipNet(torchvision.models.resnet.ResNet):
 
 	def forward(self, x):
 		x = self.conv1(x)
@@ -73,7 +73,6 @@ class ResSkipNet(torchvision.models.resnet152):
 		x = self.layer3(x)
 		x = self.layer4(x)
 
-		x = concat()
 		x = self.avgpool(x)
 		x = x.view(x.size(0), -1)
 		x = self.fc(x)
@@ -88,6 +87,7 @@ def resnet152(pretrained=False, **kwargs):
     """
     model = ResSkipNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
+        model_urls = torchvision.models.resnet.model_urls
         model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
     return model
 
@@ -95,7 +95,7 @@ def resnet152(pretrained=False, **kwargs):
 
 
 # Model
-basemodel = ResSkipNet(pretrained=True)
+basemodel = resnet152(pretrained=True)
 new_layer4 = nn.Sequential(
 # 				# nn.Conv2d(512, 256, kernel_size=(1,1), stride=(1,1), bias=False),
 # 				# nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
