@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 import torchvision
 from torchvision import datasets, models, transforms
-from .models import resnet_short, skip_net
+from models import resnet_short, skip_net
 import numpy as np
 import time
 import copy
@@ -22,7 +22,7 @@ import os
 #-----------------
 
 # Use shortened ResNet or Skipnet
-use_skipnet = False
+use_skipnet = True
 
 # Using pretrained model
 use_pretrained_feature_extraction_model = False
@@ -321,7 +321,7 @@ torch.save(model_conv.state_dict(), model_fe_filename)
 #               for param in child.parameters():
 #                       param.requires_grad = True
 
-def set_block_training(block=model_conv.layer3)
+def set_block_training(block=model_conv.layer3):
 	for i in range(len(block)):
 	        block[i].conv1.weight.requires_grad = True
 	        block[i].bn1.weight.requires_grad = True

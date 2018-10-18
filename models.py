@@ -1,18 +1,20 @@
+import torch
+import torchvision
 import torch.nn as nn
-from torch.utils.model_zoo import model_zoo
+import torch.utils.model_zoo as model_zoo
 from torchvision.models.resnet import model_urls
 from torchvision.models.resnet import ResNet, Bottleneck
 
 
-class ResNetShort(ResNet)
+class ResNetShort(ResNet):
     """
     Shortened ResNet originally designed by Seongwoon
     """
     def override_layers(self):
-        self.pool3 = nn.MaxPool2d(kernel_size=4, stride=4, padding=0) # Seongwoon
+        self.avgpool = nn.MaxPool2d(kernel_size=4, stride=4, padding=0) # Seongwoon
         self.fc = nn.Sequential(
             nn.Dropout(0.3),
-            nn.Linear(14080, 512),
+            nn.Linear(9216, 512),
             nn.ReLU(),
             nn.Linear(512, 4),
         )
@@ -91,7 +93,7 @@ def skip_net(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResSkipNet(Bottleneck, [3, 8, 36, 3], **kwargs)
+    model = SkipNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
         model_urls = torchvision.models.resnet.model_urls
         model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
