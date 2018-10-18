@@ -6,11 +6,10 @@ from __future__ import print_function, division
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.utils.model_zoo as model_zoo
 from torch.optim import lr_scheduler
 import torchvision
-from torchvision.models.resnet import Bottleneck
 from torchvision import datasets, models, transforms
+from .models import resnet_short, skip_net
 import numpy as np
 import time
 import copy
@@ -21,6 +20,10 @@ import os
 #-----------------
 # BASIC INFORMATION
 #-----------------
+
+# Use shortened ResNet or Skipnet
+use_skipnet = False
+
 # Using pretrained model
 use_pretrained_feature_extraction_model = False
 use_pretrained_fine_tuning_model = False # Setting it true makes the feature extraction be ignored.
@@ -58,93 +61,11 @@ factor = 0.3 #ReduceLROnPlateau
 patience = 5 #ReduceLROnPlateau
 threshold = 5e-2 #ReduceLROnPlateau
 
-
-
-class ResSkipNet(torchvision.models.resnet.ResNet):
-
-        def override_layers(self):
-
-
-                self.pool1 = nn.MaxPool2d(kernel_size=56, stride=1, padding=0) # Pools end of layer1
-                self.pool2 = nn.MaxPool2d(kernel_size=14, stride=7, padding=0) # Pools end of layer2
-                self.pool3 = nn.MaxPool2d(kernel_size=4, stride=4, padding=0) # Seongwoon
-                self.pool4 = nn.AvgPool2d(7, stride=1) # ResNet 152 standard
-
-                self.fc = nn.Sequential(
-                        nn.Dropout(0.3),
-                        nn.Linear(14080, 512),
-                        nn.ReLU(),
-                        nn.Linear(512, 4),
-                )
-
-
-        def forward(self, x):
-                x = self.conv1(x)
-                x = self.bn1(x)
-                x = self.relu(x)
-                x = self.maxpool(x)
-
-                x1 = self.layer1(x)
-                x2 = self.layer2(x1)
-                x3 = self.layer3(x2)
-                x4 = self.layer4(x3)
-
-                f1 = self.pool1(x1)
-                f2 = self.pool2(x2)
-                f3 = self.pool3(x3)
-                #f4 = self.pool4(x4)
-
-                f1 = f1.view(f1.size(0),-1)
-                f2 = f2.view(f2.size(0),-1)
-                f3 = f3.view(f3.size(0),-1)
-                #f4 = f4.view(f4.size(0),-1)
-
-                #print('f1 size:',f1.size())
-                #print('f2.size:',f2.size())
-                #print('f3.size:',f3.size())
-                #print('f4.size:',f4.size())
-
-                #x = self.avgpool(x)
-                x = torch.cat([f1,f2,f3],1)
-                x = x.view(x.size(0), -1)
-                x = self.fc(x)
-
-                return x
-
-
-def resnet152(pretrained=False, **kwargs):
-    """Constructs a ResNet-152 model.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    model = ResSkipNet(Bottleneck, [3, 8, 36, 3], **kwargs)
-    #model.override_layers()
-    if pretrained:
-        model_urls = torchvision.models.resnet.model_urls
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
-    model.override_layers()
-    return model
-
-
-
-
 # Model
-basemodel = resnet152(pretrained=True)
-new_layer4 = nn.Sequential(
-#                               # nn.Conv2d(512, 256, kernel_size=(1,1), stride=(1,1), bias=False),
-#                               # nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-#                               # nn.Conv2d(256, 256, kernel_size=(3,3), stride=(2,2), padding=(1, 1), bias=False),
-#                               # nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-#                               # # nn.Conv2d(512, 256, kernel_size=(1,1), stride=(1,1), bias=False),
-#                               # # nn.BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-#                               # nn.ReLU(inplace=True)
-                                )
-# new_layer4 = None
-new_layer2 = None
-new_layer3 = None
-new_avgpool = nn.MaxPool2d(kernel_size=4, stride=4, padding=0)
-# new_avgpool = None
-
+if use_skipnet:
+	basemodel = skip_net(pretrained=True)
+else:
+	basemodel = resnet_short(pretrained=True)
 
 # Transform module
 transform_train = transforms.Compose([
@@ -155,7 +76,7 @@ transform_train = transforms.Compose([
                                         # transforms.RandomAffine(0,translate=(0.1,0.1)),
                                         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
                                         transforms.RandomGrayscale(),
-                                        # transforms.RandomCrop(224,padding=10,pad_if_needed=True),     
+                                        # transforms.RandomCrop(224,padding=10,pad_if_needed=True),
                                         # transforms.RandomResizedCrop(224,scale=(0.95, 1.0),ratio=(0.95,1.05)),
                                         ], p=0.5),
                                 transforms.ToTensor(),
@@ -313,7 +234,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                         print("best so far Loss: {:.4f} Acc: {:.4f}".format(best_loss, best_acc))
 
                 # Update learning rate: ReduceLROnPlateau
-                if type(scheduler) == torch.optim.lr_scheduler.ReduceLROnPlateau: 
+                if type(scheduler) == torch.optim.lr_scheduler.ReduceLROnPlateau:
                         scheduler.step(train_loss)
 
                 end = time.time() - start
@@ -346,19 +267,7 @@ val_loader = torch.utils.data.DataLoader(dataset=val_dataset, num_workers=16, ba
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Define model
-model_conv = basemodel #nn.Sequential(*list(basemodel.children()))[0:7]
-
-#if new_layer2 != None:
-#        model_conv.layer2 = new_layer2
-#if new_layer3 != None:
-#        model_conv.layer3 = new_layer3
-#if new_layer4 != None:
-#        model_conv.layer4 = new_layer4
-#if new_avgpool != None:
-#        model_conv.avgpool = new_avgpool
-
-#model_conv.fc = new_fc_layer
-
+model_conv = basemodel
 model_conv = model_conv.to(device)
 
 
@@ -412,72 +321,18 @@ torch.save(model_conv.state_dict(), model_fe_filename)
 #               for param in child.parameters():
 #                       param.requires_grad = True
 
-
-block = model_conv.layer3
-for i in range(len(block)):
-        block[i].conv1.weight.requires_grad = True
-        block[i].bn1.weight.requires_grad = True
-        block[i].bn1.bias.requires_grad = True
-        block[i].conv2.weight.requires_grad = True
-        block[i].bn2.weight.requires_grad = True
-        block[i].bn2.bias.requires_grad = True
-        block[i].conv3.weight.requires_grad = True
-        block[i].bn3.weight.requires_grad = True
-        block[i].bn3.bias.requires_grad = True
-        block[i].conv1.weight.requires_grad = True
-
-
-
-# Allow update for a part of layer3 of Resnet
-# for i in range(22,23):
-#       model_conv.layer3[i].conv1.weight.requires_grad = True
-#       model_conv.layer3[i].bn1.weight.requires_grad = True
-#       model_conv.layer3[i].bn1.bias.requires_grad = True
-#       model_conv.layer3[i].conv2.weight.requires_grad = True
-#       model_conv.layer3[i].bn2.weight.requires_grad = True
-#       model_conv.layer3[i].bn2.bias.requires_grad = True
-#       model_conv.layer3[i].conv3.weight.requires_grad = True
-#       model_conv.layer3[i].bn3.weight.requires_grad = True
-#       model_conv.layer3[i].bn3.bias.requires_grad = True
-#       if i == 0:
-#               model_conv.layer3[i].downsample[0].weight.requires_grad = True
-#               model_conv.layer3[i].downsample[1].weight.requires_grad = True
-#               model_conv.layer3[i].downsample[1].bias.requires_grad = True
-
-
-# # Initialize layer 4
-# for i in range(0,3):
-#       torch.nn.init.xavier_uniform_(model_conv.layer4[i].conv1.weight.data)
-#       model_conv.layer4[i].bn1.weight.data.uniform_()
-#       model_conv.layer4[i].bn1.bias.data.zero_()
-#       torch.nn.init.xavier_uniform_(model_conv.layer4[i].conv2.weight.data)
-#       model_conv.layer4[i].bn2.weight.data.uniform_()
-#       model_conv.layer4[i].bn2.bias.data.zero_()
-#       torch.nn.init.xavier_uniform_(model_conv.layer4[i].conv3.weight.data)
-#       model_conv.layer4[i].bn3.weight.data.uniform_()
-#       model_conv.layer4[i].bn3.bias.data.zero_()
-#       if i == 0:
-#               torch.nn.init.xavier_uniform_(model_conv.layer4[i].downsample[0].weight.data)
-#               model_conv.layer4[i].downsample[1].weight.data.uniform_()
-#               model_conv.layer4[i].downsample[1].bias.data.zero_()
-
-
-# Allow update for a part of layer4 of Resnet
-# for i in range(2,3):
-        # model_conv.layer4[i].conv1.weight.requires_grad = True
-        # model_conv.layer4[i].bn1.weight.requires_grad = True
-        # model_conv.layer4[i].bn1.bias.requires_grad = True
-        # model_conv.layer4[i].conv2.weight.requires_grad = True
-        # model_conv.layer4[i].bn2.weight.requires_grad = True
-        # model_conv.layer4[i].bn2.bias.requires_grad = True
-        # model_conv.layer4[i].conv3.weight.requires_grad = True
-        # model_conv.layer4[i].bn3.weight.requires_grad = True
-        # model_conv.layer4[i].bn3.bias.requires_grad = True
-        # if i == 0:
-        #       model_conv.layer4[i].downsample[0].weight.requires_grad = True
-        #       model_conv.layer4[i].downsample[1].weight.requires_grad = True
-        #       model_conv.layer4[i].downsample[1].bias.requires_grad = True
-
+def set_block_training(block=model_conv.layer3)
+	for i in range(len(block)):
+	        block[i].conv1.weight.requires_grad = True
+	        block[i].bn1.weight.requires_grad = True
+	        block[i].bn1.bias.requires_grad = True
+	        block[i].conv2.weight.requires_grad = True
+	        block[i].bn2.weight.requires_grad = True
+	        block[i].bn2.bias.requires_grad = True
+	        block[i].conv3.weight.requires_grad = True
+	        block[i].bn3.weight.requires_grad = True
+	        block[i].bn3.bias.requires_grad = True
+	        block[i].conv1.weight.requires_grad = True
 
 
 for i in range(0,5):
@@ -489,6 +344,8 @@ for i in range(0,5):
         elif optimizer_type == 'Adam':
                 optimizer_conv = optim.Adam(filter(lambda p: p.requires_grad, model_conv.parameters()), lr=initial_lr_finetuning, weight_decay=weight_decay)
 
+        if i>0:
+        	set_block_training(model_conv.layer3)
 
         if scheduler_type == 'StepLR':
                 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
