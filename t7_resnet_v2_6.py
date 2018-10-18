@@ -42,8 +42,9 @@ model_ft_filename = 't7_resnet_v2_ft6.ckpt'
 #-----------------
 # Interation
 num_epochs_feature_extraction = 0
-num_epochs_fine_tuning = 10
-batch_size = 128
+num_epochs_fine_tuning = 20
+batch_size = 256
+fine_tune_batch_size = 128
 
 # Optimizer
 optimizer_type = 'SGD'
@@ -56,9 +57,9 @@ nesterov = False #SGD
 # Learning rate scheduler
 scheduler_type = 'StepLR' # ReduceLROnPlateau easily reduces LR even when training error is quite high
 step_size = 10 #StepLR
-gamma = 0.3  #0.140497184025 #StepLR
-factor = 0.3 #ReduceLROnPlateau
-patience = 5 #ReduceLROnPlateau
+gamma = 0.1  #0.140497184025 #StepLR
+factor = 0.1 #ReduceLROnPlateau
+patience = 2 #ReduceLROnPlateau
 threshold = 5e-2 #ReduceLROnPlateau
 
 # Model
@@ -140,7 +141,7 @@ class CustomDataset(torch.utils.data.Dataset):
 #-----------------
 # MODEL TRAINING
 #-----------------
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, criterion, optimizer, scheduler, batch_size, num_epochs=25):
         since = time.time()
 
         # Manage the best model so far
@@ -303,7 +304,7 @@ elif scheduler_type == 'ReduceLROnPlateau':
 print()
 print("START FEATURE EXTRACTION")
 print("************************")
-model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, num_epochs=num_epochs_feature_extraction)
+model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, batch_size, num_epochs=num_epochs_feature_extraction)
 torch.save(model_conv.state_dict(), model_fe_filename)
 
 
@@ -335,32 +336,34 @@ def set_block_training(block=model_conv.layer3):
 	        block[i].conv1.weight.requires_grad = True
 
 
+# Use one optimizer for the entire finetuning process
+if optimizer_type == 'SGD':
+        optimizer_conv = optim.SGD(filter(lambda p: p.requires_grad, model_conv.parameters()), lr=initial_lr_finetuning, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
+elif optimizer_type == 'Adam':
+        optimizer_conv = optim.Adam(filter(lambda p: p.requires_grad, model_conv.parameters()), lr=initial_lr_finetuning, weight_decay=weight_decay)
+
+# Use one scheduler for the entire finetuning process
+if scheduler_type == 'StepLR':
+        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
+elif scheduler_type == 'ReduceLROnPlateau':
+        exp_lr_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer_conv, patience=patience, threshold=threshold, verbose=True, factor=factor)
+
+# Start tuning the entire conv block 3
+set_block_training(block=model_conv.layer3):
+print("Now training layer3 as well")
+
+# Finetuning
 for i in range(0,5):
-
         criterion = nn.CrossEntropyLoss()
-
-        if optimizer_type == 'SGD':
-                optimizer_conv = optim.SGD(filter(lambda p: p.requires_grad, model_conv.parameters()), lr=initial_lr_finetuning, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
-        elif optimizer_type == 'Adam':
-                optimizer_conv = optim.Adam(filter(lambda p: p.requires_grad, model_conv.parameters()), lr=initial_lr_finetuning, weight_decay=weight_decay)
-
-        if i>0:
-        	set_block_training(model_conv.layer3)
-
-        if scheduler_type == 'StepLR':
-                exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
-        elif scheduler_type == 'ReduceLROnPlateau':
-                exp_lr_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer_conv, patience=patience, threshold=threshold, verbose=True, factor=factor)
-
         print()
         print("START FINE TUNING " + str(int(i)))
         print("********************")
+
         if use_pretrained_fine_tuning_model:
                 model_conv.load_state_dict(torch.load(model_ft_filename))
-        model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, num_epochs=num_epochs_fine_tuning)
+        model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, fine_tune_batch_size num_epochs=num_epochs_fine_tuning)
 
         model_ft_filename = 't7_resnet_v2_ft6_{0}.ckpt'.format(int(i))
         torch.save(model_conv.state_dict(), model_ft_filename)
-        initial_lr_finetuning = initial_lr_finetuning * 0.1 # 0.0248364446993
 
 
